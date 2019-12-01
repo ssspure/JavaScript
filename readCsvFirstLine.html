@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script type="text/javascript">
+
+        function readFirstLine(file){
+            let chunk = 10*1024;
+            let offset = 0;
+            let fileSize = file.size;
+            let firstLineBinary = [];
+
+            function stringRead(){
+                let reader = new FileReader();
+
+                let blob = new Blob([new Uint8Array(firstLineBinary)]);
+
+                reader.onload = function(event){
+                    console.log(event.target.result);
+                }
+
+                reader.readAsText(blob)
+            }
+
+            async function byteRead(event) {
+                let dataView = new DataView(event.target.result);
+
+                for(let i=0;i<event.target.result.byteLength;i++){
+                    let c = dataView.getUint8(i);
+
+                    if(c !== 13){
+                        firstLineBinary.push(c);
+
+                    }else{
+                        await stringRead();
+                        return;
+                    }
+                }
+                offset = offset+chunk;
+                blockRead();
+            }
+
+            function blockRead(){
+                let reader = new FileReader();
+                let blob = file.slice(offset,offset+chunk);
+
+                reader.onload = byteRead;
+
+                reader.readAsArrayBuffer(blob);
+            }
+
+            blockRead();
+        }
+
+        function handleChangeFile(event) {
+            let file = event.target.files[0];
+            readFirstLine(file);
+        }
+
+    </script>
+</head>
+<body>
+    <input type="file" name="file" onchange="handleChangeFile(event)">
+</body>
+</html>

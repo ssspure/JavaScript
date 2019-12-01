@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>读取文件</title>
+    <script type="text/javascript">
+        /**
+         * 读取一个文件大小比较大的CSV文件
+         * @param file
+         * @returns {Promise<void>}
+         */
+
+        async function parseFile(file){
+            // 文件大小
+            let fileSize = file.size;
+            // 已经读取的文件行数
+            let doneLineCount = 0;
+            // 已经读取的文件大小
+            let doneTotalSize = 0;
+            // 每次读取文件的大小
+            let chunkSize = 10*1024;
+            // 每次读取到的指定大小的内容
+            let byteArray = [];
+
+            async function parseBack(event){
+                return new Promise(((resolve, reject) => {
+                    let stringArray = event.target.result.split('\r\n');
+                    stringArray.forEach(elem => {
+                        if(elem.length > 0){
+                            console.log('每一行数据：' + elem);
+                        }
+                    })
+                    resolve();
+                }))
+            }
+
+            // 将每一次读取到的二进制数据转换成字符串
+            async function stringRead(){
+                return new Promise(((resolve, reject) => {
+
+                    let reader = new FileReader();
+
+                    let blob = new Blob([new Uint8Array(byteArray)]);
+
+                    reader.onloadend = async function(event){
+                        await parseBack(event);
+                        resolve();
+                    }
+
+                    reader.readAsText(blob);
+                }))
+            }
+
+            async function byteRead(event){
+                byteArray = [];
+                // 当读取过程没有错误的时候
+                if(event.target.error === null){
+                    let dataView = new DataView(event.target.result);
+
+                    // 下面这一部分处理的原因是，如果CSV最后一行的数据没有换行符
+                    if((doneTotalSize + chunkSize) >= fileSize){
+                        let newArrayBuffer = new ArrayBuffer(dataView.byteLength+2);
+                        let newDataView = new DataView(newArrayBuffer);
+                        for(let i=0;i<dataView.byteLength;i++){
+                            newDataView.setInt8(i,dataView.getUint8(i));
+                        }
+                        newDataView.setUint8(dataView.byteLength-2,13);
+                        newDataView.setUint8(dataView.byteLength-1,10);
+                        dataView = newDataView;
+                    }
+
+                    let lineString = [];
+
+                    for(let i=0;i<event.target.result.byteLength;i++){
+
+                        // 一个字节一个字节读取
+                        let c = dataView.getUint8(i);
+                        lineString.push(c);
+                        // 判断一个字节是否是换行，如果读到了换行，就将读取到的一行存储起来
+                        if(c === 10){
+                            // 行数加1
+                            doneLineCount = doneLineCount + 1;
+
+                            // 将读取到的这一行数据加到块内容中
+                            byteArray.push(...lineString);
+                            // 读取到的一行数据的大小
+                            let lineSize = lineString.length;
+                            // 一共读取到的大小
+                            doneTotalSize = doneTotalSize + lineSize;
+
+                            // 一行读取结束之后，开始读取下一行数据
+                            lineString = [];
+                        }
+                    }
+                }else {
+                    // 当有错误的时候退出处理
+                    return;
+                }
+
+                // 将读取到的这一部分数据转换成String
+                if(doneTotalSize < fileSize){
+                    await stringRead();
+                }else{
+                    // 当已经读取到的数据大小跟文件大小一致的时候，停止处理
+                    await stringRead();
+                    return;
+                }
+
+                blockRead();
+            }
+
+            // 文件比较大的时候，如果整个文件都读入内存，可能会导致处理变慢
+            function blockRead(){
+                // 当文件比较大的时候分段读取文件
+                let blob = file.slice(doneTotalSize, doneTotalSize + chunkSize);
+                // 生成文件读取对象
+                let reader = new FileReader();
+                // 读取处理完成
+                reader.onload = byteRead;
+
+                // 将文件读取为ArrayBuffer
+                reader.readAsArrayBuffer(blob);
+            }
+
+            blockRead();
+        }
+
+        function handleChangeFile(event) {
+            let file = event.target.files[0];
+            parseFile(file);
+        }
+    </script>
+</head>
+<body>
+    <input type="file" name="file" onchange="handleChangeFile(event)">
+</body>
+</html>
